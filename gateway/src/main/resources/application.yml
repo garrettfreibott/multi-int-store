@@ -1,0 +1,21 @@
+server:
+  port: 9001
+  error:
+    include-stacktrace: always
+
+logging:
+  level:
+    root: INFO
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: cdr-ingest
+          uri: http://cdr-ingest:8080
+          predicates:
+            - Host=ingest.ion.localhost
+        - id: cdr-minio
+          uri: http://cdr-minio:9000
+          predicates:
+            - Host=minio.ion.localhost

@@ -3,6 +3,23 @@
 # Name to give the docker network and stack. Update network instances in docker-compose.yml file if modified.
 networkname="cdr_local-minio"
 
+# Removes the docker stack and network.
+# Docker networks usually take a few seconds to go down, so it waits to prevent redeployment issues
+function cleanup () {
+    printf "Removing $networkname docker stack and network...\n"
+    docker stack rm $networkname
+    docker network rm $networkname
+    waiting=$(docker network ls | grep "$networkname")
+    printf "\nWaiting for docker network '$networkname' to go down."
+    while [ ! -z "$waiting" ]; do
+        sleep 2
+        printf "."
+        waiting=$(docker network ls | grep " $networkname ")
+    done
+    printf "\nDone!\n"
+}
+
+# Waits for everything to start up
 function wait_for_containers () {
     waiting=$(docker service ls | grep ""$networkname"_.*0/1 ")
     printf "\nWaiting for docker services to start."
@@ -47,6 +64,12 @@ function check_network_configuration () {
         exit 1
     fi
 }
+
+# if parameter --clean is passed in, tear down the stack and network
+if [ $1 == "--clean" ]; then
+    cleanup
+    exit 0
+fi
 
 # Warning message and beginning of script
 printf "\

@@ -25,11 +25,11 @@
 version: '3.7'
 services:
   minio:
-    image: minio/minio:RELEASE.2019-06-19T18-24-42Z
+    image: minio/minio
     entrypoint: sh
-    hostname: minio
-    ports:
-    - "9000:9000"
+    hostname: cdr-minio
+    expose:
+      - 9000
     environment:
       MINIO_ACCESS_KEY: MINIOEXAMPLEACCESSKEY
       MINIO_SECRET_KEY: MINIOEXAMPLESECRETKEY
@@ -39,10 +39,8 @@ services:
   ingest:
     image: ${REGISTRY:-docker.io}/cnxta/cdr-ingest:0.1.0-SNAPSHOT
     hostname: cdr-ingest
-    ports:
-      - target: 8080
-        published: 9040
-        protocol: tcp
+    expose:
+      - 8080
     networks:
       - cdr_local-minio
     deploy:
@@ -63,11 +61,8 @@ services:
   multi-int-store:
     image: ${REGISTRY:-docker.io}/cnxta/cdr-multi-int-store:0.1.0-SNAPSHOT
     hostname: cdr-store
-    ports:
-      - target: 8080
-        published: 9041
-        protocol: tcp
-    restart: on-failure
+    expose:
+      - 8080
     networks:
       - cdr_local-minio
     depends_on:
@@ -83,10 +78,8 @@ services:
   search:
     image: ${REGISTRY:-docker.io}/cnxta/cdr-search:0.1.0-SNAPSHOT
     hostname: cdr-search
-    ports:
-      - target: 8080
-        published: 9039
-        protocol: tcp
+    expose:
+      - 8080
     networks:
       - cdr_local-minio
     deploy:
@@ -95,21 +88,76 @@ services:
   # TODO: solr version
   solr:
     image: solr
-    ports:
-      - "9983:8983"
+    expose:
+      - 8983
     volumes:
-      - data:/opt/solr/server/solr/mycores
+      - solr-data:/opt/solr/server/solr/mycores
     entrypoint:
       - docker-entrypoint.sh
       - solr-precreate
       - searchTerms
     networks:
       - cdr_local-minio
+    deploy:
+      restart_policy:
+        condition: any
+  # Security Setup
+  gateway:
+    image: cdr-spring-gateway
+    networks:
+      - cdr_local-minio
+    ports:
+      - target: 9001
+        published: 80
+    deploy:
+      restart_policy:
+        condition: any
+  keycloak:
+    depends_on:
+      - mysql
+    environment:
+      DB_ADDR: mysql
+      DB_DATABASE: keycloak
+      DB_PASSWORD: password
+      DB_USER: keycloak
+      DB_VENDOR: MYSQL
+      KEYCLOAK_PASSWORD: admin
+      KEYCLOAK_USER: admin
+      KEYCLOAK_HOSTNAME: keycloak.localhost
+    image: jboss/keycloak:4.8.3.Final
+    networks:
+      - cdr_local-minio
+    ports:
+      - target: 8080
+        published: 8080
+      - target: 9000
+        published: 9000
+    deploy:
+      restart_policy:
+        condition: any
+  mysql:
+    hostname: mysql
+    networks:
+      - cdr_local-minio
+    environment:
+      MYSQL_DATABASE: keycloak
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: keycloak
+    image: mysql:5
+    volumes:
+      - mysql-data:/var/lib/mysql:rw
+    deploy:
+      restart_policy:
+        condition: any
 networks:
   cdr_local-minio:
     external: true
 volumes:
-  data:
+  mysql-data:
+    driver: local
+  solr-data:
+    driver: local
 secrets:
   aws_s3_secret:
     file: ./secrets/minio_secret.notsec
