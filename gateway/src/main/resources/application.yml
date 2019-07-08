@@ -1,0 +1,47 @@
+server:
+  port: 9999
+
+logging:
+  level:
+    root: INFO
+
+spring:
+  application:
+    name: cdr-gateway
+
+# Manual Routes for now - Possibly implement Eureka service registry in the future
+zuul:
+  ignoredServices: '*'
+  routes:
+    minio:
+      path: /minio/**
+      url: http://cdr-minio:9000/
+    keycloak:
+      path: /keycloak/**
+      url: http://keycloak:8080/
+    ingest:
+      path: /ingest/**
+      url: http://cdr-ingest:8080/
+
+#eureka:
+#  client:
+#    serviceUrl:
+#      defaultZone: http://registryservice:8761/eureka
+#    - id: minio
+#        uri: http://cdr-minio:9000
+#        predicates:
+#          - Path= /minio/*
+#        filters:
+#          - StripPrefix=1
+#        - id: keycloak
+#          uri: http://keycloak:8080
+#          predicates:
+#            - Path= /keycloak/*
+#          filters:
+#            - StripPrefix=1
+#        - id: ingest
+#          uri: http://cdr-ingest:8080
+#          predicates:
+#            - Path= /ingest/*
+#          filters:
+#            - StripPrefix=1

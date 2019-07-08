@@ -1,0 +1,185 @@
+# Configurable Registries
+#    This compose file allows the composition to be used in multiple environments. Instead of
+#    using hard-coded strings to identify the names of images, variable interpolation is used
+#    to make the registry part of the name configurable at runtime.
+#
+#    If the REGISTRY environment variable is not set, the registry defaults to
+#    Docker Hub (docker.io).
+#
+#    If the REGISTRY variable is set, interpolation on the command line can be used to inject
+#    a registry's address when the Docker service is deployed. the format of the command is:
+#
+#        docker stack deploy -c <(REGISTRY=<registry-url> docker-compose config) cdr
+#
+#    where <registry-url> is changed to be the address of the target registry.
+# --------------------------------------------------------------------------------------------------
+# To deploy to a cloud:
+#    1. Build the images locally.
+#    2. Tag those images to include the target registry address.
+#    3. Push those images.
+#    4. From the cloud environment, execute:
+#
+#        docker stack deploy -c <(REGISTRY=<registry-url> docker-compose config) cdr
+#
+#
+version: '3.7'
+
+networks:
+  cdr_local-minio:
+    external: true
+
+volumes:
+  mysql-data:
+    driver: local
+  solr-data:
+    driver: local
+
+secrets:
+  aws_s3_secret:
+    file: ./secrets/minio_secret.notsec
+  aws_s3_access:
+    file: ./secrets/minio_access.notsec
+
+configs:
+  ingest_config:
+    file: ./configs/ingest_config.yml
+  mis_config:
+    file: ./configs/mis_config.yml
+
+services:
+  minio:
+    image: minio/minio
+    hostname: cdr-minio
+    ports:
+      - target: 9000
+        published: 8000
+    entrypoint: sh
+    environment:
+      MINIO_ACCESS_KEY: MINIOEXAMPLEACCESSKEY1
+      MINIO_SECRET_KEY: MINIOEXAMPLESECRETKEY1
+    networks:
+      - cdr_local-minio
+    command: -c "mkdir /data/ingest-quarantine && /usr/bin/minio server /data"
+
+  ingest:
+    image: ${REGISTRY:-docker.io}/cnxta/cdr-ingest:0.1.0-SNAPSHOT
+    hostname: cdr-ingest
+    #expose:
+    #  - 8080
+    networks:
+      - cdr_local-minio
+    deploy:
+      restart_policy:
+        condition: any
+    secrets:
+      - source: aws_s3_secret
+        target: /secrets/aws_s3_secret.sec
+      - source: aws_s3_access
+        target: /secrets/aws_s3_access.sec
+    configs:
+      - source: ingest_config
+        target: /configs/ingest_config.yml
+    command:
+      - "--aws.s3.secret.file=/secrets/aws_s3_secret.sec"
+      - "--aws.s3.access.file=/secrets/aws_s3_access.sec"
+      - "--spring.config.additional-location=file:/configs/ingest_config.yml"
+
+  multi-int-store:
+    image: ${REGISTRY:-docker.io}/cnxta/cdr-multi-int-store:0.1.0-SNAPSHOT
+    hostname: cdr-store
+    #expose:
+    #  - 8080
+    networks:
+      - cdr_local-minio
+    depends_on:
+      - solr
+    deploy:
+      restart_policy:
+        condition: any
+    configs:
+      - source: mis_config
+        target: /configs/mis_config.yml
+    command:
+      - "--spring.config.additional-location=file:/configs/mis_config.yml"
+
+  search:
+    image: ${REGISTRY:-docker.io}/cnxta/cdr-search:0.1.0-SNAPSHOT
+    hostname: cdr-search
+    #expose:
+    #  - 8080
+    networks:
+      - cdr_local-minio
+    deploy:
+      restart_policy:
+        condition: any
+
+  # TODO: solr version
+  solr:
+    image: solr
+    hostname: solr
+    #expose:
+    #  - 8983
+    volumes:
+      - solr-data:/opt/solr/server/solr/mycores
+    entrypoint:
+      - docker-entrypoint.sh
+      - solr-precreate
+      - searchTerms
+    networks:
+      - cdr_local-minio
+    deploy:
+      restart_policy:
+        condition: any
+
+  # Security Setup
+  gateway:
+    image: ${REGISTRY:-docker.io}/cnxta/cdr-gateway:0.1.0-SNAPSHOT
+    hostname: gateway
+    ports:
+      - target: 9999
+        published: 9999
+    networks:
+      - cdr_local-minio
+    deploy:
+      restart_policy:
+        condition: any
+
+  keycloak:
+    image: jboss/keycloak:4.8.3.Final
+    hostname: keycloak
+    networks:
+      - cdr_local-minio
+    ports:
+      - target: 8080
+        published: 8080
+      - target: 9000
+        published: 9000
+    depends_on:
+      - mysql
+    environment:
+      DB_ADDR: mysql
+      DB_DATABASE: keycloak
+      DB_PASSWORD: password
+      DB_USER: keycloak
+      DB_VENDOR: MYSQL
+      KEYCLOAK_PASSWORD: admin
+      KEYCLOAK_USER: admin
+    deploy:
+      restart_policy:
+        condition: any
+
+  mysql:
+    image: mysql:5
+    hostname: mysql
+    networks:
+      - cdr_local-minio
+    environment:
+      MYSQL_DATABASE: keycloak
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: keycloak
+    volumes:
+      - mysql-data:/var/lib/mysql:rw
+    deploy:
+      restart_policy:
+        condition: any
