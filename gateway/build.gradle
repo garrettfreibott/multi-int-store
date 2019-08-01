@@ -1,0 +1,56 @@
+/*
+ * Copyright (c) 2019 Connexta, LLC
+ *
+ * Released under the GNU Lesser General Public License version 3; see
+ * https://www.gnu.org/licenses/lgpl-3.0.html
+ */
+/* Build Script */
+plugins {
+    id "org.springframework.boot"
+    id "java"
+    id "io.spring.dependency-management"
+    id "com.palantir.docker"
+}
+
+configurations {
+    implementation {
+        exclude group: "org.jdom" // CVE-2019-12814
+    }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:Greenwich.RELEASE"
+    }
+}
+
+dependencies {
+    compile "org.springframework.boot:spring-boot-starter-webflux",
+            "org.springframework.boot:spring-boot-starter-oauth2-client",
+            "org.springframework.cloud:spring-cloud-starter-gateway",
+            "org.springframework.cloud:spring-cloud-starter-security",
+            // for sample controller in gateway
+            "org.springframework.boot:spring-boot-starter-thymeleaf",
+            "org.thymeleaf.extras:thymeleaf-extras-springsecurity5"
+}
+
+dependencyCheck {
+    suppressionFile = "${projectDir}/owasp-suppressions.xml"
+}
+
+springBoot {
+    mainClassName = "com.connexta.gateway.GatewayApplication"
+}
+
+bootJar {
+    launchScript()
+}
+
+docker {
+    files tasks.bootJar.outputs
+    name "cnxta/ion-gateway:${project.version}"
+    buildArgs([JAR_FILE: "${tasks.bootJar.outputs.files.singleFile.name}"])
+}
+
+build.dependsOn("docker")
+bootRun.dependsOn(build)

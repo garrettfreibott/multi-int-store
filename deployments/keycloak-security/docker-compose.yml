@@ -1,0 +1,213 @@
+# Configurable Registries
+#    This compose file allows the composition to be used in multiple environments. Instead of
+#    using hard-coded strings to identify the names of images, variable interpolation is used
+#    to make the registry part of the name configurable at runtime.
+#
+#    If the REGISTRY environment variable is not set, the registry defaults to
+#    Docker Hub (docker.io).
+#
+#    If the REGISTRY variable is set, interpolation on the command line can be used to inject
+#    a registry's address when the Docker service is deployed. the format of the command is:
+#
+#        docker stack deploy -c <(REGISTRY=<registry-url> docker-compose config) cdr
+#
+#    where <registry-url> is changed to be the address of the target registry.
+# --------------------------------------------------------------------------------------------------
+# To deploy to a cloud:
+#    1. Build the images locally.
+#    2. Tag those images to include the target registry address.
+#    3. Push those images.
+#    4. From the cloud environment, execute:
+#
+#        docker stack deploy -c <(REGISTRY=<registry-url> docker-compose config) cdr
+#
+#
+version: '3.7'
+
+networks:
+  default:
+    driver: overlay
+  proxy:
+    driver: overlay
+  security:
+    driver: overlay
+
+volumes:
+  mysql_data:
+    driver: local
+  solr_data:
+    driver: local
+
+secrets:
+  aws_s3_secret:
+    file: ./secrets/minio_secret.notsec
+  aws_s3_access:
+    file: ./secrets/minio_access.notsec
+
+configs:
+  ingest_config:
+    file: ./configs/ingest_config.yml
+  mis_config:
+    file: ./configs/mis_config.yml
+  keycloak_config:
+    file: ./configs/keycloakJsonConfig.json
+
+services:
+  minio:
+    image: minio/minio
+    hostname: minio
+    ports:
+      - target: 9000
+        published: 8000
+    #expose
+    #  - 8080
+    entrypoint: sh
+    environment:
+      MINIO_ACCESS_KEY: MINIOEXAMPLEACCESSKEY1
+      MINIO_SECRET_KEY: MINIOEXAMPLESECRETKEY1
+    networks:
+      - default
+    command: -c "mkdir /data/ingest-quarantine && /usr/bin/minio server /data"
+
+  ingest:
+    image: ${REGISTRY:-docker.io}/cnxta/cdr-ingest:0.1.0-SNAPSHOT
+    hostname: ingest
+    #expose:
+    #  - 8080
+    networks:
+      - default
+    deploy:
+      restart_policy:
+        condition: any
+    secrets:
+      - source: aws_s3_secret
+        target: /secrets/aws_s3_secret.sec
+      - source: aws_s3_access
+        target: /secrets/aws_s3_access.sec
+    configs:
+      - source: ingest_config
+        target: /configs/ingest_config.yml
+    command:
+      - "--aws.s3.secret.file=/secrets/aws_s3_secret.sec"
+      - "--aws.s3.access.file=/secrets/aws_s3_access.sec"
+      - "--spring.config.additional-location=file:/configs/ingest_config.yml"
+
+  multi-int-store:
+    image: ${REGISTRY:-docker.io}/cnxta/cdr-multi-int-store:0.1.0-SNAPSHOT
+    hostname: multi-int-store
+    #expose:
+    #  - 8080
+    networks:
+      - default
+    depends_on:
+      - solr
+    deploy:
+      restart_policy:
+        condition: any
+    secrets:
+      - source: aws_s3_secret
+        target: /secrets/aws_s3_secret.sec
+      - source: aws_s3_access
+        target: /secrets/aws_s3_access.sec
+    configs:
+      - source: mis_config
+        target: /configs/mis_config.yml
+    command:
+      - "--aws.s3.secret.file=/secrets/aws_s3_secret.sec"
+      - "--aws.s3.access.file=/secrets/aws_s3_access.sec"
+      - "--spring.config.additional-location=file:/configs/mis_config.yml"
+
+  # TODO: solr version
+  solr:
+    image: solr
+    hostname: solr
+    #expose:
+    #  - 8983
+    volumes:
+      - solr_data:/opt/solr/server/solr/mycores
+    entrypoint:
+      - docker-entrypoint.sh
+      - solr-precreate
+      - searchTerms
+    networks:
+      - default
+
+  # Security Setup
+  gateway:
+    image: ${REGISTRY:-docker.io}/cnxta/ion-gateway:0.1.0-SNAPSHOT
+    labels:
+      traefik.enabled: "true"
+#      traefik.docker.network: proxy
+      traefik.frontend.passHostHeader: "true"
+      traefik.frontend.rule: Host:ion
+      traefik.port: '8080'
+    networks:
+      - default
+#      default: null
+#      proxy: null
+#      security: null
+
+  keycloak:
+    depends_on:
+      - mysql
+    environment:
+      DB_ADDR: mysql
+      DB_DATABASE: keycloak
+      DB_PASSWORD: password
+      DB_USER: keycloak
+      DB_VENDOR: MYSQL
+      KEYCLOAK_PASSWORD: admin
+      KEYCLOAK_USER: admin
+      keycloak.migration.action: import
+      keycloak.migration.provider: singleFile
+      keycloak.migration.file: /keycloakJsonConfig.json
+      keycloak.migration.strategy: OVERWRITE_EXISTING
+    image: jboss/keycloak
+    labels:
+#      traefik.docker.network: proxy
+      traefik.frontend.passHostHeader: "true"
+      traefik.frontend.rule: Host:keycloak
+      traefik.port: '9000'
+    networks:
+      - default
+#      default: null
+#      proxy: null
+#      security: null
+    ports:
+      - published: 8080
+        target: 8080
+    configs:
+      - source: keycloak_config
+        target: /keycloakJsonConfig.json
+
+  mysql:
+    environment:
+      MYSQL_DATABASE: keycloak
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: keycloak
+    image: mysql:5
+    volumes:
+      - mysql_data:/var/lib/mysql:rw
+    networks:
+      - default
+    # no network property
+
+  reverse-proxy:
+    command: --docker
+    image: traefik
+    networks:
+      - default
+#      default: null
+#      proxy: null
+    ports:
+      - published: 80
+        target: 80
+      - published: 8081
+        target: 8081
+      - published: 443
+        target: 443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - ./configs/proxy:/etc/traefik:rw
+
