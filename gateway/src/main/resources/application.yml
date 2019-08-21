@@ -5,11 +5,11 @@ server:
 
 logging:
   level:
-    root: INFO
-    org.springframework.web: INFO
-    org.springframework.security: INFO
-    org.springframework.security.oauth2: INFO
-    org.springframework.cloud.gateway: TRACE
+    root: DEBUG
+#    org.springframework.web: INFO
+#    org.springframework.security: INFO
+#    org.springframework.security.oauth2: INFO
+#    org.springframework.cloud.gateway: TRACE
 #    org.springframework.boot.autoconfigure: DEBUG
 
 kc:
@@ -17,15 +17,7 @@ kc:
   realm: master
   realm-url: ${kc.base-url}/realms/${kc.realm}
 
-security:
-  enable-csrf: false
-
 spring:
-  autoconfigure:
-    # TODO: remove when fixed https://github.com/spring-projects/spring-security/issues/6314
-    exclude: org.springframework.boot.actuate.autoconfigure.security.reactive.ReactiveManagementWebSecurityAutoConfiguration
-  thymeleaf:
-    cache: false
   security:
     oauth2:
       client:
@@ -34,7 +26,7 @@ spring:
             provider: keycloak
             client-id: login-client
             client-secret: secret
-            authorization-grant-type: authorization_code
+            authorization-grant-type: client_credentials #authorization_code
             redirect-uri-template: "{baseUrl}/{action}/oauth2/code/{registrationId}"
             scope: openid,profile,email,resource.read
         provider:
@@ -57,20 +49,15 @@ spring:
           uri: http://keycloak:8080
           predicates:
             - Path=/keycloak/**
-#          filters:
-#            - StripPrefix=1
         - id: store
           uri: http://store:8080
           predicates:
             - Path=/store/**
-#          filters:
-#            - StripPrefix=1
         - id: ingest
           uri: http://ingest:8080
           predicates:
             - Path=/ingest/**
-#          filters:
-#            - StripPrefix=1
+
 
 #eureka:
 #  client:

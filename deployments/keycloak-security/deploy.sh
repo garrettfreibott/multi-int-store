@@ -86,6 +86,7 @@ if [ -z $1 ]; then
     print_warning
     deploy_images
     wait_for_containers
+    ./access-token.sh
 else
    case $1 in
     deploy | d)
@@ -93,7 +94,7 @@ else
         assert_stack_is_not_deployed
         deploy_images
         wait_for_containers
-        access_token.sh
+        ./access-token.sh
         ;;
     clean | c)
         cleanup
@@ -101,14 +102,14 @@ else
     update | u)
         deploy_images
         wait_for_containers
-        access_token.sh
+        ./access-token.sh
         ;;
     redeploy | r)
         print_warning
         cleanup
         deploy_images
         wait_for_containers
-        access_token.sh
+        ./access-token.sh
         ;;
     *)
         printf "$helptext"
