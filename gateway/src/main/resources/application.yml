@@ -5,11 +5,11 @@ server:
 
 logging:
   level:
-    root: DEBUG
-#    org.springframework.web: INFO
-#    org.springframework.security: INFO
-#    org.springframework.security.oauth2: INFO
-#    org.springframework.cloud.gateway: TRACE
+    root: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.security.oauth2: INFO
+    org.springframework.cloud.gateway: TRACE
 #    org.springframework.boot.autoconfigure: DEBUG
 
 kc:
@@ -18,6 +18,9 @@ kc:
   realm-url: ${kc.base-url}/realms/${kc.realm}
 
 spring:
+  spring:
+    thymeleaf:
+      cache: false
   security:
     oauth2:
       client:
@@ -26,7 +29,7 @@ spring:
             provider: keycloak
             client-id: login-client
             client-secret: secret
-            authorization-grant-type: client_credentials #authorization_code
+            authorization-grant-type: authorization_code
             redirect-uri-template: "{baseUrl}/{action}/oauth2/code/{registrationId}"
             scope: openid,profile,email,resource.read
         provider:

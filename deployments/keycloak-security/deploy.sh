@@ -31,9 +31,9 @@ function wait_for_empty_results() {
 function cleanup () {
     printf "Removing $name docker stack and network...\n"
     docker stack rm $name
-    docker network rm $name
-    printf "\nWaiting for docker network '$name' to go down."
-    wait_for_empty_results "docker network ls | grep -w $name"
+#    docker network rm $name
+#    printf "\nWaiting for docker network '$name' to go down."
+#    wait_for_empty_results "docker network ls | grep -w $name"
     printf "\nDone!\n"
 }
 

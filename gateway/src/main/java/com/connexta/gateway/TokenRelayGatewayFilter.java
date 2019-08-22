@@ -18,7 +18,6 @@ import reactor.core.publisher.Mono;
 
 @Component
 public class TokenRelayGatewayFilter implements GatewayFilter {
-
   private ServerOAuth2AuthorizedClientRepository authorizedClientRepository;
 
   public TokenRelayGatewayFilter(
@@ -30,7 +29,6 @@ public class TokenRelayGatewayFilter implements GatewayFilter {
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
     return exchange
         .getPrincipal()
-        .filter(principal -> principal instanceof OAuth2AuthenticationToken)
         .cast(OAuth2AuthenticationToken.class)
         .flatMap(authentication -> authorizedClient(exchange, authentication))
         .map(OAuth2AuthorizedClient::getAccessToken)
