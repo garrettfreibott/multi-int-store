@@ -23,6 +23,9 @@ spring:
       cache: false
   security:
     oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${kc.realm-url}/protocol/openid-connect/certs
       client:
         registration:
           master:

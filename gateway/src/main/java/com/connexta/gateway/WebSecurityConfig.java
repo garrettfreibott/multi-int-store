@@ -37,7 +37,8 @@ import org.springframework.security.web.server.WebFilterChainProxy;
   WebEndpointAutoConfiguration.class,
   ReactiveOAuth2ClientAutoConfiguration.class
 })
-class CustomReactiveManagementWebSecurityAutoConfiguration {
+@EnableWebFluxSecurity // BREAKING LINE
+class WebSecurityConfig {
 
   // NOTE: This code duplicates ReactiveManagementWebSecurityAutoConfiguration and enhances with
   // oauth2Login() specific configuration
@@ -45,7 +46,9 @@ class CustomReactiveManagementWebSecurityAutoConfiguration {
   @Bean
   SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
     // @formatter:off
-    return http.authorizeExchange()
+    return http.csrf()
+        .disable()
+        .authorizeExchange()
         .matchers(EndpointRequest.to(HealthEndpoint.class, InfoEndpoint.class))
         .permitAll()
         .anyExchange()
@@ -55,6 +58,12 @@ class CustomReactiveManagementWebSecurityAutoConfiguration {
         .and()
         .formLogin()
         .and()
+        // START BREAKING SECTION
+        .oauth2ResourceServer()
+        .jwt()
+        .and()
+        .and()
+        // END BREAKING SECTION
         .oauth2Login()
         .and()
         //        .exceptionHandling()
