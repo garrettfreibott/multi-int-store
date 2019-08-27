@@ -134,6 +134,8 @@ services:
 
   # Security Setup
   gateway:
+    depends_on:
+      - keycloak
     image: ${REGISTRY:-docker.io}/cnxta/ion-gateway:0.1.0-SNAPSHOT
     labels:
       traefik.enabled: "true"

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class GatewayController {
 
-  @GetMapping("/")
+  @GetMapping("/whoami")
   public String index(
       Model model,
       @RegisteredOAuth2AuthorizedClient OAuth2AuthorizedClient authorizedClient,
